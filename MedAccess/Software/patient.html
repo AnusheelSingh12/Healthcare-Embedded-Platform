@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MedAccess — Patient Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --border: #e2e0da;
+    --text: #1a1916;
+    --muted: #8a8880;
+    --accent: #2563eb;
+    --accent2: #e11d48;
+    --green: #16a34a;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+    --serif: 'DM Serif Display', serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* NAV */
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 16px 32px; background: var(--text); }
+  .logo { font-family: var(--serif); font-size: 20px; color: #fff; }
+  .logo span { color: #60a5fa; }
+  .nav-links { display: flex; gap: 8px; align-items: center; }
+  .nav-links a { font-family: var(--mono); font-size: 12px; color: #9ca3af; text-decoration: none; padding: 6px 14px; border-radius: 20px; transition: all .2s; }
+  .nav-links a.active { background: #fff; color: var(--text); }
+  .nav-links a:hover:not(.active) { color: #fff; }
+  .nav-time { font-family: var(--mono); font-size: 11px; color: #6b7280; }
+
+  /* SERIAL HINT BANNER — shown on patient page so user knows how to connect */
+  .serial-hint {
+    background: #eff6ff; border-bottom: 1px solid #bfdbfe;
+    padding: 10px 32px; font-family: var(--mono); font-size: 11px; color: #1d4ed8;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .serial-hint strong { font-weight: 600; }
+
+  .esp32-state {
+    background: #ffffff;
+    border-bottom: 1px solid var(--border);
+    padding: 10px 32px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .state-pill {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: #334155;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    padding: 5px 10px;
+  }
+  .state-pill.online {
+    color: #166534;
+    background: #f0fdf4;
+    border-color: #86efac;
+  }
+  .state-pill.alert {
+    color: #9f1239;
+    background: #fff1f2;
+    border-color: #fecdd3;
+  }
+
+  /* LAYOUT */
+  .container { display: grid; grid-template-columns: 380px 1fr; gap: 0; min-height: calc(100vh - 56px); }
+
+  /* FORM PANEL */
+  .form-panel { background: var(--surface); border-right: 1px solid var(--border); padding: 28px 24px; overflow-y: auto; max-height: calc(100vh - 92px); }
+  .panel-label { font-family: var(--mono); font-size: 10px; letter-spacing: .12em; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; }
+  .panel-title { font-family: var(--serif); font-size: 26px; margin-bottom: 24px; line-height: 1.2; }
+  .panel-title em { color: var(--accent); font-style: normal; }
+
+  /* PHOTO UPLOAD */
+  .photo-row { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 20px; }
+  .photo-upload { width: 64px; height: 64px; border: 2px dashed var(--border); border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; overflow: hidden; transition: border-color .2s; }
+  .photo-upload:hover { border-color: var(--accent); }
+  .photo-upload img { width: 100%; height: 100%; object-fit: cover; }
+  .photo-upload .icon { font-size: 22px; color: var(--muted); }
+  .photo-info h4 { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+  .photo-info p { font-size: 11px; color: var(--muted); line-height: 1.5; }
+  #photoInput { display: none; }
+
+  /* FORM FIELDS */
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; }
+  .field label span { color: var(--accent2); }
+  .field input, .field select, .field textarea {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
+    font-family: var(--sans); font-size: 13px; background: var(--bg); color: var(--text);
+    outline: none; transition: border-color .2s, box-shadow .2s;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.08); }
+  .field textarea { resize: vertical; min-height: 80px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* FILE UPLOAD */
+  .file-drop { border: 2px dashed var(--border); border-radius: 10px; padding: 20px; text-align: center; cursor: pointer; transition: all .2s; margin-bottom: 14px; }
+  .file-drop:hover { border-color: var(--accent); background: rgba(37,99,235,.03); }
+  .file-drop .icon { font-size: 24px; margin-bottom: 6px; }
+  .file-drop p { font-size: 12px; color: var(--muted); }
+  .file-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .file-tag { font-family: var(--mono); font-size: 10px; background: #eff6ff; color: var(--accent); padding: 4px 8px; border-radius: 4px; border: 1px solid #bfdbfe; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #fileInput { display: none; }
+
+  /* ACCESS KEY */
+  .key-section { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 4px; }
+  .key-note { font-size: 11px; color: var(--muted); margin-top: 5px; line-height: 1.5; }
+
+  /* BUTTONS */
+  .btn-primary { width: 100%; padding: 12px; background: var(--text); color: #fff; border: none; border-radius: 10px; font-family: var(--sans); font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity .2s; margin-top: 6px; }
+  .btn-primary:hover { opacity: .85; }
+  .btn-deny { width: 100%; padding: 10px; background: transparent; color: var(--accent2); border: 1px solid #fecdd3; border-radius: 10px; font-family: var(--sans); font-size: 13px; font-weight: 500; cursor: pointer; margin-top: 8px; transition: all .2s; }
+  .btn-deny:hover { background: #fff1f2; }
+
+  /* CARD PANEL */
+  .card-panel { padding: 28px 32px; overflow-y: auto; max-height: calc(100vh - 92px); }
+  .card-label { font-family: var(--mono); font-size: 10px; letter-spacing: .12em; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; }
+  .card-title { font-family: var(--serif); font-size: 28px; margin-bottom: 20px; }
+  .card-title em { color: var(--accent); font-style: normal; }
+
+  /* LIVE CARD */
+  .live-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+  .card-top-bar { height: 3px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+  .card-body { padding: 20px 24px; }
+  .card-header { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .card-photo { width: 52px; height: 52px; border-radius: 10px; object-fit: cover; border: 2px solid var(--border); }
+  .card-photo-placeholder { width: 52px; height: 52px; border-radius: 10px; background: #eff6ff; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 24px; }
+  .card-name { font-family: var(--serif); font-size: 22px; }
+  .card-pid { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-top: 2px; }
+  .card-time { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  .info-label { font-family: var(--mono); font-size: 9px; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; margin-bottom: 10px; }
+  .info-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .info-chip { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; min-width: 80px; }
+  .info-chip .chip-label { font-family: var(--mono); font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .info-chip .chip-val { font-size: 13px; font-weight: 600; margin-top: 2px; }
+  .blood-chip { background: #fff1f2; border-color: #fecdd3; }
+  .blood-chip .chip-val { color: var(--accent2); }
+
+  .section-block { margin-bottom: 14px; }
+  .med-history-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--text); min-height: 40px; }
+  .file-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  .hash-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); margin-top: 10px; }
+  .hash-label { font-family: var(--mono); font-size: 9px; color: var(--muted); white-space: nowrap; }
+  .hash-val { font-family: var(--mono); font-size: 11px; color: var(--accent); word-break: break-all; }
+
+  .card-actions { display: flex; gap: 10px; padding: 14px 24px; border-top: 1px solid var(--border); background: var(--bg); }
+  .card-actions button { flex: 1; padding: 9px; border-radius: 8px; font-family: var(--sans); font-size: 12px; font-weight: 500; cursor: pointer; transition: all .2s; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+  .card-actions .btn-clear { color: var(--accent2); border-color: #fecdd3; background: #fff1f2; }
+  .card-actions button:hover { opacity: .8; }
+
+  .hospital-link { display: flex; align-items: center; justify-content: space-between; margin: 14px 24px; padding: 14px 16px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; cursor: pointer; text-decoration: none; transition: background .2s; }
+  .hospital-link:hover { background: #dbeafe; }
+  .hospital-link-info h4 { font-size: 13px; font-weight: 600; color: var(--text); }
+  .hospital-link-info p { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .hospital-link-icon { font-size: 18px; }
+
+  .empty-card { text-align: center; padding: 60px 24px; color: var(--muted); }
+  .empty-card .empty-icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-card p { font-size: 14px; }
+
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--text); color: #fff; padding: 12px 20px; border-radius: 10px; font-size: 13px; transform: translateY(100px); opacity: 0; transition: all .3s; z-index: 999; }
+  .toast.show { transform: translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+<nav>
+  <div class="logo">Med<span>Access</span></div>
+  <div class="nav-links">
+    <a href="patient.html" class="active">Patient Dashboard</a>
+    <a href="hospital.html">Hospital Panel →</a>
+  </div>
+  <div class="nav-time" id="navTime"></div>
+</nav>
+
+<!-- Serial connection reminder -->
+<div class="serial-hint">
+  <span>🔌</span>
+  <span>
+    <strong>ESP32 Connection:</strong>
+    Open <a href="hospital.html" style="color:#1d4ed8">Hospital Panel</a>,
+    plug in your ESP32 via USB, and click <strong>Connect Serial</strong>.
+    Use Chrome or Edge (v89+) — Web Serial requires a secure context (localhost or HTTPS).
+  </span>
+</div>
+
+<div class="esp32-state">
+  <span class="state-pill" id="espConn">ESP32: Disconnected</span>
+  <span class="state-pill" id="espMode">Mode: idle</span>
+  <span class="state-pill" id="espSignal">Signal: —</span>
+  <span class="state-pill" id="espHospital">Active Hospital: none</span>
+  <span class="state-pill" id="espUpdated">Updated: —</span>
+</div>
+
+<div class="container">
+  <!-- FORM -->
+  <div class="form-panel">
+    <div class="panel-label">Patient Registration</div>
+    <div class="panel-title">Enter <em>patient</em> details</div>
+
+    <div class="photo-row">
+      <div class="photo-upload" id="photoUploadBtn">
+        <span class="icon" id="photoIcon">👤</span>
+        <img id="photoPreview" style="display:none">
+      </div>
+      <div class="photo-info">
+        <h4>Patient Photo</h4>
+        <p>Optional — used in the Health Card and shown to hospitals when access is granted.</p>
+      </div>
+      <input type="file" id="photoInput" accept="image/*">
+    </div>
+
+    <div class="field">
+      <label>Full Name <span>*</span></label>
+      <input type="text" id="fName" placeholder="e.g. Arjun Ramesh Kumar">
+    </div>
+    <div class="row2">
+      <div class="field"><label>Age</label><input type="number" id="fAge" placeholder="34"></div>
+      <div class="field">
+        <label>Blood Group</label>
+        <select id="fBlood">
+          <option value="">Select</option>
+          <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+          <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+        </select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Contact Number</label><input type="text" id="fContact" placeholder="+91 98765 43210"></div>
+      <div class="field"><label>Email</label><input type="email" id="fEmail" placeholder="patient@example.com"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Emergency Contact Name</label><input type="text" id="fEcName" placeholder="e.g. Priya Kumar"></div>
+      <div class="field"><label>Emergency Contact Number</label><input type="text" id="fEcNum" placeholder="+91 98765 43210"></div>
+    </div>
+    <div class="field">
+      <label>Medical History</label>
+      <textarea id="fHistory" placeholder="List conditions, allergies, ongoing medications, surgeries..."></textarea>
+    </div>
+
+    <div class="field">
+      <label>Upload Reports / Scans (Optional)</label>
+      <div class="file-drop" id="fileDropZone">
+        <div class="icon">📎</div>
+        <p>Click to attach files — PDF, images, documents</p>
+      </div>
+      <div class="file-list" id="fileList"></div>
+      <input type="file" id="fileInput" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+    </div>
+
+    <div class="key-section field">
+      <label>Patient Access Key (used to deny emergency access)</label>
+      <input type="password" id="fKey" placeholder="Set a private key — minimum 4 characters">
+      <p class="key-note">This key lets the patient deny hospital access on the Hospital Panel in case of a false alarm.</p>
+    </div>
+
+    <button class="btn-primary" onclick="savePatient()">💾 Save Patient Data</button>
+    <button class="btn-deny" onclick="denyAccess()">✕ Deny Access</button>
+  </div>
+
+  <!-- LIVE CARD -->
+  <div class="card-panel">
+    <div class="card-label">Health Card</div>
+    <div class="card-title">Live <em>profile</em></div>
+    <div id="liveCard">
+      <div class="empty-card">
+        <div class="empty-icon">🏥</div>
+        <p>No patient data yet.<br>Fill the form and save to generate your live medical card.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let attachedFiles = [];
+const ESP32_STATE_KEY = 'medaccess_esp32_state';
+
+function safeReadEsp32State() {
+  try {
+    return JSON.parse(localStorage.getItem(ESP32_STATE_KEY) || '{}');
+  } catch (_) {
+    return {};
+  }
+}
+
+function renderEsp32State() {
+  const state = safeReadEsp32State();
+
+  const connEl = document.getElementById('espConn');
+  const modeEl = document.getElementById('espMode');
+  const signalEl = document.getElementById('espSignal');
+  const hospitalEl = document.getElementById('espHospital');
+  const updatedEl = document.getElementById('espUpdated');
+
+  const connected = !!state.connected;
+  const mode = state.mode || 'idle';
+  const signal = state.signal || '—';
+  const activeHospital = state.activeHospital || 0;
+
+  connEl.textContent = `ESP32: ${connected ? 'Connected' : 'Disconnected'}`;
+  modeEl.textContent = `Mode: ${mode}`;
+  signalEl.textContent = `Signal: ${signal}`;
+  hospitalEl.textContent = `Active Hospital: ${activeHospital > 0 ? `LED${activeHospital}` : 'none'}`;
+
+  connEl.className = 'state-pill' + (connected ? ' online' : '');
+  signalEl.className = 'state-pill' + (signal.startsWith('LED') ? ' alert' : '');
+
+  if (state.updatedAt) {
+    const ts = new Date(state.updatedAt);
+    const pretty = Number.isNaN(ts.getTime()) ? '—' : ts.toLocaleTimeString('en-IN', { hour12: false });
+    updatedEl.textContent = `Updated: ${pretty}`;
+  } else {
+    updatedEl.textContent = 'Updated: —';
+  }
+}
+
+window.addEventListener('storage', (event) => {
+  if (event.key === ESP32_STATE_KEY) renderEsp32State();
+});
+
+// Clock
+setInterval(() => {
+  const now = new Date();
+  document.getElementById('navTime').textContent = now.toLocaleDateString('en-IN') + '  ' + now.toTimeString().slice(0,8);
+}, 1000);
+
+// Photo
+document.getElementById('photoUploadBtn').onclick = () => document.getElementById('photoInput').click();
+document.getElementById('photoInput').onchange = function() {
+  const file = this.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('photoPreview').src = e.target.result;
+    document.getElementById('photoPreview').style.display = 'block';
+    document.getElementById('photoIcon').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+};
+
+// File drop
+document.getElementById('fileDropZone').onclick = () => document.getElementById('fileInput').click();
+document.getElementById('fileInput').onchange = function() {
+  Array.from(this.files).forEach(f => attachedFiles.push(f.name));
+  renderFileTags();
+};
+
+function renderFileTags() {
+  const el = document.getElementById('fileList');
+  el.innerHTML = attachedFiles.map(n => `<span class="file-tag">📄 ${n}</span>`).join('');
+}
+
+function genHash() {
+  return Array.from({length: 40}, () => '0123456789abcdef'[Math.floor(Math.random()*16)]).join('');
+}
+
+function genPID() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  return 'PID-' + chars[Math.floor(Math.random()*chars.length)] + chars[Math.floor(Math.random()*chars.length)] + Math.floor(1000+Math.random()*9000);
+}
+
+function savePatient() {
+  const name = document.getElementById('fName').value.trim();
+  if (!name) { showToast('Please enter patient name'); return; }
+
+  const previewEl = document.getElementById('photoPreview');
+  const photoSrc = (previewEl.style.display !== 'none' && previewEl.src && !previewEl.src.endsWith(window.location.href)) ? previewEl.src : '';
+  const now = new Date();
+  const pid = genPID();
+  const hash = genHash();
+  const ts = now.toLocaleString('en-IN', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+
+  const data = {
+    name, pid, hash, ts,
+    age: document.getElementById('fAge').value,
+    blood: document.getElementById('fBlood').value,
+    contact: document.getElementById('fContact').value,
+    email: document.getElementById('fEmail').value,
+    ecName: document.getElementById('fEcName').value,
+    ecNum: document.getElementById('fEcNum').value,
+    history: document.getElementById('fHistory').value,
+    photo: photoSrc,
+    files: attachedFiles,
+    accessKey: document.getElementById('fKey').value,
+    denied: false
+  };
+
+  localStorage.setItem('medaccess_patient', JSON.stringify(data));
+  renderCard(data);
+  showToast('Patient data saved ✓');
+}
+
+function denyAccess() {
+  const raw = localStorage.getItem('medaccess_patient');
+  if (!raw) return;
+  const data = JSON.parse(raw);
+  data.denied = true;
+  localStorage.setItem('medaccess_patient', JSON.stringify(data));
+  showToast('Access denied — hospitals cannot view patient data');
+}
+
+function renderCard(d) {
+  const photo = d.photo
+    ? `<img class="card-photo" src="${d.photo}">`
+    : `<div class="card-photo-placeholder">👤</div>`;
+
+  const fileChips = d.files?.length
+    ? `<div class="file-chips">${d.files.map(f => `<span class="file-tag">📄 ${f}</span>`).join('')}</div>`
+    : '<span style="font-size:12px;color:var(--muted)">No files attached</span>';
+
+  document.getElementById('liveCard').innerHTML = `
+    <div class="live-card">
+      <div class="card-top-bar"></div>
+      <div class="card-body">
+        <div class="card-header">
+          ${photo}
+          <div>
+            <div class="card-name">${d.name}</div>
+            <div class="card-pid">${d.pid}</div>
+            <div class="card-time">Saved ${d.ts}</div>
+          </div>
+        </div>
+        <div class="info-label">Patient Details</div>
+        <div class="info-grid">
+          <div class="info-chip"><div class="chip-label">Age</div><div class="chip-val">${d.age || '—'} yrs</div></div>
+          <div class="info-chip blood-chip"><div class="chip-label">Blood</div><div class="chip-val">${d.blood || '—'}</div></div>
+          <div class="info-chip"><div class="chip-label">Contact</div><div class="chip-val">${d.contact || '—'}</div></div>
+          <div class="info-chip"><div class="chip-label">Email</div><div class="chip-val" style="font-size:11px">${d.email || '—'}</div></div>
+          <div class="info-chip"><div class="chip-label">Emrg. Name</div><div class="chip-val">${d.ecName || '—'}</div></div>
+          <div class="info-chip"><div class="chip-label">Emrg. Contact</div><div class="chip-val">${d.ecNum || '—'}</div></div>
+        </div>
+        <div class="section-block">
+          <div class="info-label">Medical History</div>
+          <div class="med-history-box">${d.history || '—'}</div>
+        </div>
+        <div class="section-block">
+          <div class="info-label">Attached Files</div>
+          ${fileChips}
+        </div>
+        <div class="hash-row">
+          <span class="hash-label">Record Hash</span>
+          <span class="hash-val">${d.hash}</span>
+        </div>
+      </div>
+      <div class="card-actions">
+        <button onclick="editMode()">✏ Edit</button>
+        <button class="btn-clear" onclick="clearRecord()">✕ Clear Record</button>
+      </div>
+    </div>
+    <a class="hospital-link" href="hospital.html">
+      <div class="hospital-link-info">
+        <h4>Open Hospital Emergency Panel</h4>
+        <p>Connect ESP32 via USB Serial on the hospital panel — data is linked automatically.</p>
+      </div>
+      <span class="hospital-link-icon">→</span>
+    </a>
+  `;
+}
+
+function editMode() {
+  const raw = localStorage.getItem('medaccess_patient');
+  if (!raw) return;
+  const d = JSON.parse(raw);
+  document.getElementById('fName').value    = d.name    || '';
+  document.getElementById('fAge').value     = d.age     || '';
+  document.getElementById('fBlood').value   = d.blood   || '';
+  document.getElementById('fContact').value = d.contact || '';
+  document.getElementById('fEmail').value   = d.email   || '';
+  document.getElementById('fEcName').value  = d.ecName  || '';
+  document.getElementById('fEcNum').value   = d.ecNum   || '';
+  document.getElementById('fHistory').value = d.history || '';
+  document.getElementById('fKey').value     = d.accessKey || '';
+  if (d.photo) {
+    document.getElementById('photoPreview').src = d.photo;
+    document.getElementById('photoPreview').style.display = 'block';
+    document.getElementById('photoIcon').style.display = 'none';
+  }
+  attachedFiles = d.files || [];
+  renderFileTags();
+  document.querySelector('.form-panel').scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function clearRecord() {
+  if (!confirm('Clear all patient data?')) return;
+  localStorage.removeItem('medaccess_patient');
+  document.getElementById('liveCard').innerHTML = `<div class="empty-card"><div class="empty-icon">🏥</div><p>No patient data yet.<br>Fill the form and save to generate your live medical card.</p></div>`;
+  showToast('Record cleared');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// Load on start
+const saved = localStorage.getItem('medaccess_patient');
+if (saved) renderCard(JSON.parse(saved));
+renderEsp32State();
+</script>
+</body>
+</html>

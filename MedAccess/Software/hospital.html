@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MedAccess — Hospital Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #13161e;
+    --border: #1e2330;
+    --text: #e8eaf0;
+    --muted: #5a6075;
+    --accent: #3b82f6;
+    --accent2: #f43f5e;
+    --green: #22c55e;
+    --yellow: #eab308;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+    --serif: 'DM Serif Display', serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 14px 28px; background: #0a0c10; border-bottom: 1px solid var(--border); }
+  .logo { font-family: var(--serif); font-size: 18px; color: #fff; }
+  .logo span { color: #60a5fa; }
+  .nav-links { display: flex; gap: 6px; align-items: center; }
+  .nav-links a { font-family: var(--mono); font-size: 11px; color: var(--muted); text-decoration: none; padding: 6px 14px; border-radius: 20px; transition: all .2s; }
+  .nav-links a.active { background: #fff; color: #0a0c10; }
+  .nav-links a:hover:not(.active) { color: var(--text); }
+
+  /* STATUS BAR */
+  .status-bar { display: flex; gap: 24px; padding: 12px 28px; border-bottom: 1px solid var(--border); background: #0a0c10; flex-wrap: wrap; }
+  .stat { display: flex; gap: 8px; align-items: center; }
+  .stat-label { font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+  .stat-val { font-family: var(--mono); font-size: 11px; color: var(--text); }
+  .stat-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+  .stat-dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+  /* CONSOLE */
+  .console-box { margin: 20px 28px; background: #0a0c10; border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; font-family: var(--mono); }
+  .console-box .c-title { font-size: 12px; color: var(--accent); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .console-box .c-title::before { content: '▶'; font-size: 10px; }
+  .console-msgs { max-height: 64px; overflow-y: auto; }
+  .console-msgs p { font-size: 11px; color: var(--muted); line-height: 1.8; }
+  .console-msgs p.ok { color: var(--green); }
+  .console-msgs p.signal { color: var(--yellow); }
+  .console-msgs p.err { color: var(--accent2); }
+
+  /* SERIAL CONFIG — replaces IP config */
+  .serial-config { margin: 0 28px 20px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .serial-config label { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .baud-select {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    padding: 7px 12px; border-radius: 8px; font-family: var(--mono); font-size: 12px;
+    outline: none; cursor: pointer;
+  }
+  .baud-select:focus { border-color: var(--accent); }
+  .btn-connect { padding: 7px 18px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-family: var(--mono); font-size: 11px; cursor: pointer; transition: opacity .2s; }
+  .btn-connect:hover { opacity: .8; }
+  .btn-connect.connected { background: var(--accent2); }
+  .btn-demo { padding: 7px 14px; background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 8px; font-family: var(--mono); font-size: 11px; cursor: pointer; transition: all .2s; }
+  .btn-demo:hover { color: var(--text); border-color: var(--muted); }
+
+  /* SERIAL NOT SUPPORTED BANNER */
+  .serial-unsupported { display: none; margin: 0 28px 16px; padding: 10px 16px; background: rgba(234,179,8,.08); border: 1px solid rgba(234,179,8,.3); border-radius: 8px; font-family: var(--mono); font-size: 11px; color: var(--yellow); }
+
+  /* HOSPITALS SECTION */
+  .hospitals-section { padding: 0 28px 8px; }
+  .hospitals-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 0; }
+
+  /* EXPAND PANELS */
+  .expand-panel { display: none; background: var(--surface); border: 1px solid var(--accent); border-radius: 14px; overflow: visible; margin-top: 12px; position: relative; }
+  .expand-panel.open { display: block; animation: slideDown .25s ease; }
+  @keyframes slideDown { from{opacity:0;transform:translateY(-8px);} to{opacity:1;transform:translateY(0);} }
+
+  .ep-arrow { position: absolute; top: -9px; width: 16px; height: 16px; background: var(--surface); border-top: 1px solid var(--accent); border-left: 1px solid var(--accent); transform: rotate(45deg); }
+  .ep-arrow-left   { left: calc(16.66% - 8px); }
+  .ep-arrow-center { left: calc(50% - 8px); }
+  .ep-arrow-right  { left: calc(83.33% - 8px); }
+
+  .ep2 { border-color: var(--green); }
+  .ep2 .ep-arrow { border-color: var(--green); }
+  .ep3 { border-color: var(--yellow); }
+  .ep3 .ep-arrow { border-color: var(--yellow); }
+
+  .ep-bar { height: 3px; background: linear-gradient(90deg, #3b82f6, #f43f5e); border-radius: 0; }
+  .ep2 .ep-bar { background: linear-gradient(90deg, #22c55e, #3b82f6); }
+  .ep3 .ep-bar { background: linear-gradient(90deg, #eab308, #f43f5e); }
+
+  .ep-body { padding: 22px 24px; }
+
+  .hospital-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; cursor: default; transition: all .3s; position: relative; overflow: hidden; }
+  .hospital-card.active { border-color: var(--accent); cursor: pointer; box-shadow: 0 0 24px rgba(59,130,246,.15); animation: pulse-border 2s infinite; }
+  .hospital-card.active:hover { transform: translateY(-2px); }
+  @keyframes pulse-border {
+    0%, 100% { box-shadow: 0 0 20px rgba(59,130,246,.12); }
+    50% { box-shadow: 0 0 36px rgba(59,130,246,.28); }
+  }
+  .hospital-card.led2.active { border-color: var(--green); }
+  .hospital-card.led2.active { animation: pulse-green 2s infinite; }
+  @keyframes pulse-green { 0%,100%{box-shadow:0 0 20px rgba(34,197,94,.12);} 50%{box-shadow:0 0 36px rgba(34,197,94,.28);} }
+  .hospital-card.led3.active { border-color: var(--yellow); }
+  .hospital-card.led3.active { animation: pulse-yellow 2s infinite; }
+  @keyframes pulse-yellow { 0%,100%{box-shadow:0 0 20px rgba(234,179,8,.12);} 50%{box-shadow:0 0 36px rgba(234,179,8,.28);} }
+
+  .card-led-badge { font-family: var(--mono); font-size: 9px; color: var(--muted); background: var(--bg); border: 1px solid var(--border); padding: 3px 8px; border-radius: 4px; display: inline-block; margin-bottom: 12px; }
+  .card-indicator { position: absolute; top: 18px; right: 18px; width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
+  .hospital-card.active .card-indicator { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: blink 1s infinite; }
+  .hospital-card.led2.active .card-indicator { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .hospital-card.led3.active .card-indicator { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.3;} }
+
+  .h-name { font-family: var(--serif); font-style: italic; font-size: 20px; margin-bottom: 10px; }
+  .h-meta { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+  .h-meta span { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .h-status { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--bg); padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border); }
+  .h-status.emergency { color: var(--accent); background: rgba(59,130,246,.08); border-color: rgba(59,130,246,.3); }
+  .led2 .h-status.emergency { color: var(--green); background: rgba(34,197,94,.08); border-color: rgba(34,197,94,.3); }
+  .led3 .h-status.emergency { color: var(--yellow); background: rgba(234,179,8,.08); border-color: rgba(234,179,8,.3); }
+
+  .ep-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .ep-title { font-family: var(--serif); font-size: 18px; }
+  .ep-hash { font-family: var(--mono); font-size: 10px; color: var(--accent); }
+  .close-btn { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 4px 8px; }
+  .close-btn:hover { color: var(--text); }
+  .ep-content { display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: start; }
+  .ep-photo { width: 72px; height: 72px; border-radius: 12px; object-fit: cover; border: 2px solid var(--border); }
+  .ep-photo-ph { width: 72px; height: 72px; border-radius: 12px; background: #1e2330; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 32px; }
+  .ep-info-grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .ep-chip { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 7px 11px; }
+  .ep-chip .lbl { font-family: var(--mono); font-size: 9px; color: var(--muted); text-transform: uppercase; }
+  .ep-chip .val { font-size: 12px; font-weight: 600; margin-top: 2px; }
+  .ep-chip.blood { background: rgba(244,63,94,.08); border-color: rgba(244,63,94,.25); }
+  .ep-chip.blood .val { color: var(--accent2); }
+  .ep-section { margin-bottom: 12px; }
+  .ep-sec-label { font-family: var(--mono); font-size: 9px; color: var(--muted); text-transform: uppercase; margin-bottom: 6px; }
+  .ep-sec-val { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font-size: 13px; }
+  .ep-files { display: flex; flex-wrap: wrap; gap: 6px; }
+  .file-chip { font-family: var(--mono); font-size: 10px; background: rgba(59,130,246,.08); color: var(--accent); border: 1px solid rgba(59,130,246,.2); padding: 3px 8px; border-radius: 4px; }
+  .denied-banner { background: rgba(244,63,94,.1); border: 1px solid rgba(244,63,94,.3); border-radius: 10px; padding: 14px 18px; color: var(--accent2); font-size: 13px; text-align: center; }
+
+  /* MAP */
+  .map-section { margin: 20px 28px 28px; }
+  .map-title { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 10px; }
+  #map { height: 320px; border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+
+  /* DENY MODAL */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 100; align-items: center; justify-content: center; }
+  .overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 28px; width: 360px; }
+  .modal h3 { font-family: var(--serif); font-size: 20px; margin-bottom: 8px; }
+  .modal p { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+  .modal input { width: 100%; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: 13px; outline: none; margin-bottom: 12px; }
+  .modal input:focus { border-color: var(--accent); }
+  .modal-btns { display: flex; gap: 10px; }
+  .modal-btns button { flex: 1; padding: 10px; border-radius: 8px; font-family: var(--sans); font-size: 13px; cursor: pointer; border: 1px solid var(--border); }
+  .btn-deny-confirm { background: var(--accent2); color: #fff; border-color: var(--accent2) !important; }
+  .btn-cancel { background: transparent; color: var(--muted); }
+
+  .toast { position: fixed; bottom: 24px; right: 24px; background: #1e2330; color: var(--text); border: 1px solid var(--border); padding: 12px 20px; border-radius: 10px; font-size: 13px; transform: translateY(100px); opacity: 0; transition: all .3s; z-index: 999; }
+  .toast.show { transform: translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+<nav>
+  <div class="logo">Med<span>Access</span></div>
+  <div class="nav-links">
+    <a href="patient.html">← Patient Dashboard</a>
+    <a href="hospital.html" class="active">Hospital Panel</a>
+  </div>
+</nav>
+
+<div class="status-bar">
+  <div class="stat"><div class="stat-dot" id="connDot"></div><span class="stat-label">Serial</span><span class="stat-val" id="statSignal">—</span></div>
+  <div class="stat"><span class="stat-label">Port</span><span class="stat-val" id="statPort">—</span></div>
+  <div class="stat"><span class="stat-label">Active</span><span class="stat-val" id="statActive">0</span></div>
+  <div class="stat"><span class="stat-label">Acquired</span><span class="stat-val" id="statAcquired">0</span></div>
+  <div class="stat"><span class="stat-label">Last Update</span><span class="stat-val" id="statUpdate">—</span></div>
+</div>
+
+<!-- Serial not supported banner (shown if Web Serial API unavailable) -->
+<div class="serial-unsupported" id="serialUnsupported">
+  ⚠ Web Serial API not available. Use Chrome or Edge (v89+) over HTTPS or localhost. Demo mode still works below.
+</div>
+
+<!-- SERIAL CONFIG — replaces IP input row -->
+<div class="serial-config">
+  <label>Baud Rate:</label>
+  <select class="baud-select" id="baudSelect">
+    <option value="115200" selected>115200</option>
+    <option value="9600">9600</option>
+    <option value="57600">57600</option>
+  </select>
+  <button class="btn-connect" id="connectBtn" onclick="toggleSerial()">⚡ Connect Serial</button>
+  <button class="btn-demo" onclick="startDemo()">▶ Demo Mode</button>
+</div>
+
+<div class="console-box">
+  <div class="c-title">Serial Console</div>
+  <div class="console-msgs" id="consoleMsgs">
+    <p>Waiting for serial connection... Connect ESP32 via USB Type-B / USB-C cable and click Connect Serial.</p>
+  </div>
+</div>
+
+<div class="hospitals-section">
+  <!-- HOSPITAL CARDS ROW -->
+  <div class="hospitals-grid">
+    <div class="hospital-card led1" id="card1" onclick="openCard(1)">
+      <div class="card-indicator"></div>
+      <div class="card-led-badge">LED1</div>
+      <div class="h-name">Apollo Hospitals</div>
+      <div class="h-meta">
+        <span>📍 Greams Road</span>
+        <span>🏥 Multi-specialty</span>
+        <span>🛏 550 beds</span>
+      </div>
+      <div class="h-status" id="status1">● Standby</div>
+    </div>
+    <div class="hospital-card led2" id="card2" onclick="openCard(2)">
+      <div class="card-indicator"></div>
+      <div class="card-led-badge">LED2</div>
+      <div class="h-name">MIOT International</div>
+      <div class="h-meta">
+        <span>📍 Manapakkam</span>
+        <span>🏥 Orthopaedic & General</span>
+        <span>🛏 400 beds</span>
+      </div>
+      <div class="h-status" id="status2">● Standby</div>
+    </div>
+    <div class="hospital-card led3" id="card3" onclick="openCard(3)">
+      <div class="card-indicator"></div>
+      <div class="card-led-badge">LED3</div>
+      <div class="h-name">Fortis Malar</div>
+      <div class="h-meta">
+        <span>📍 Adyar</span>
+        <span>🏥 Cardiac Care</span>
+        <span>🛏 180 beds</span>
+      </div>
+      <div class="h-status" id="status3">● Standby</div>
+    </div>
+  </div>
+
+  <!-- EXPAND PANELS -->
+  <div class="expand-panel ep1" id="expandPanel1">
+    <div class="ep-arrow ep-arrow-left"></div>
+    <div class="ep-bar"></div>
+    <div class="ep-body" id="expandBody1"></div>
+  </div>
+  <div class="expand-panel ep2" id="expandPanel2">
+    <div class="ep-arrow ep-arrow-center"></div>
+    <div class="ep-bar"></div>
+    <div class="ep-body" id="expandBody2"></div>
+  </div>
+  <div class="expand-panel ep3" id="expandPanel3">
+    <div class="ep-arrow ep-arrow-right"></div>
+    <div class="ep-bar"></div>
+    <div class="ep-body" id="expandBody3"></div>
+  </div>
+</div>
+
+<!-- MAP -->
+<div class="map-section">
+  <div class="map-title">Hospital Locations & Emergency Proximity</div>
+  <div id="map"></div>
+</div>
+
+<!-- DENY MODAL -->
+<div class="overlay" id="denyOverlay">
+  <div class="modal">
+    <h3>Deny Emergency Access</h3>
+    <p>Enter your patient access key to remove data from hospital view.</p>
+    <input type="password" id="denyKeyInput" placeholder="Enter access key">
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeDenyModal()">Cancel</button>
+      <button class="btn-deny-confirm" onclick="confirmDeny()">Confirm Deny</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let activeHospital = 0;
+let demoInterval   = null;
+let demoRunning    = false;
+let map, patientMarker;
+
+// Serial state
+let serialPort      = null;
+let serialReader    = null;
+let serialReading   = false;   // flag to stop read loop cleanly
+let lineBuffer      = '';      // accumulate partial lines from USB stream
+const ESP32_STATE_KEY = 'medaccess_esp32_state';
+
+const hospitals = [
+  { name: 'Apollo Hospitals',   lat: 13.0604, lng: 80.2426, color: '#3b82f6' },
+  { name: 'MIOT International', lat: 13.0095, lng: 80.1798, color: '#22c55e' },
+  { name: 'Fortis Malar',       lat: 13.0023, lng: 80.2545, color: '#eab308' }
+];
+
+// ESP32 resets after exactly 10000 ms
+const ESP_RESET_MS = 10000;
+
+function publishEsp32State(patch = {}) {
+  let current = {};
+  try {
+    current = JSON.parse(localStorage.getItem(ESP32_STATE_KEY) || '{}');
+  } catch (_) {
+    current = {};
+  }
+
+  const next = {
+    connected: false,
+    mode: 'idle',
+    port: '—',
+    signal: '—',
+    activeHospital: 0,
+    lastMessage: '',
+    updatedAt: new Date().toISOString(),
+    ...current,
+    ...patch,
+    updatedAt: new Date().toISOString()
+  };
+
+  localStorage.setItem(ESP32_STATE_KEY, JSON.stringify(next));
+}
+
+// ============================================================
+// WEB SERIAL SUPPORT CHECK
+// ============================================================
+if (!('serial' in navigator)) {
+  document.getElementById('serialUnsupported').style.display = 'block';
+  document.getElementById('connectBtn').disabled = true;
+  document.getElementById('connectBtn').style.opacity = '0.4';
+  document.getElementById('connectBtn').title = 'Web Serial not supported in this browser';
+}
+
+// ============================================================
+// SERIAL — connect / disconnect toggle
+// ============================================================
+async function toggleSerial() {
+  if (serialPort) {
+    await disconnectSerial();
+  } else {
+    await connectSerial();
+  }
+}
+
+async function connectSerial() {
+  if (!('serial' in navigator)) {
+    log('Web Serial API not supported. Use Chrome/Edge 89+.', 'err');
+    return;
+  }
+  try {
+    const baud = parseInt(document.getElementById('baudSelect').value, 10);
+
+    // Show the browser's port-picker dialog
+    serialPort = await navigator.serial.requestPort();
+    await serialPort.open({ baudRate: baud });
+
+    const info = serialPort.getInfo();
+    const portLabel = (info.usbVendorId && info.usbProductId)
+      ? `USB ${info.usbVendorId.toString(16)}:${info.usbProductId.toString(16)}`
+      : 'Serial Port';
+
+    document.getElementById('statPort').textContent = portLabel;
+    document.getElementById('statSignal').textContent = 'OPEN';
+    updateConnDot(true);
+    publishEsp32State({
+      connected: true,
+      mode: 'serial',
+      port: portLabel,
+      signal: 'OPEN',
+      lastMessage: `Serial port opened at ${baud} baud`
+    });
+
+    const btn = document.getElementById('connectBtn');
+    btn.textContent = '✕ Disconnect';
+    btn.classList.add('connected');
+
+    log(`Serial port opened at ${baud} baud`, 'ok');
+    stopDemo(); // stop demo if running
+
+    // Start read loop
+    serialReading = true;
+    readSerialLoop();
+
+  } catch (err) {
+    if (err.name === 'NotFoundError') {
+      log('No port selected — cancelled.', '');
+    } else {
+      log(`Serial error: ${err.message}`, 'err');
+    }
+    serialPort = null;
+  }
+}
+
+async function disconnectSerial() {
+  serialReading = false;
+
+  try {
+    if (serialReader) {
+      await serialReader.cancel();
+      serialReader = null;
+    }
+  } catch (_) {}
+
+  try {
+    if (serialPort) {
+      await serialPort.close();
+    }
+  } catch (_) {}
+
+  serialPort = null;
+  lineBuffer  = '';
+
+  updateConnDot(false);
+  document.getElementById('statSignal').textContent = '—';
+  document.getElementById('statPort').textContent   = '—';
+  publishEsp32State({
+    connected: false,
+    mode: 'idle',
+    port: '—',
+    signal: '—',
+    activeHospital: 0,
+    lastMessage: 'Serial port closed'
+  });
+
+  const btn = document.getElementById('connectBtn');
+  btn.textContent = '⚡ Connect Serial';
+  btn.classList.remove('connected');
+
+  log('Serial port closed.', '');
+}
+
+// ============================================================
+// SERIAL READ LOOP
+// Reads a stream of UTF-8 text from the port, accumulates into
+// lines, and hands each complete line to handleSignal().
+// The ESP32 sends lines ending with \n (Arduino Serial.println).
+// ============================================================
+async function readSerialLoop() {
+  const decoder = new TextDecoderStream();
+  serialPort.readable.pipeTo(decoder.writable).catch(() => {});
+  serialReader = decoder.readable.getReader();
+
+  try {
+    while (serialReading) {
+      const { value, done } = await serialReader.read();
+      if (done) break;
+      if (!value) continue;
+
+      // Accumulate characters and split on newlines
+      lineBuffer += value;
+      const lines = lineBuffer.split('\n');
+      // Last element is an incomplete line (keep it in buffer)
+      lineBuffer = lines.pop();
+
+      for (const raw of lines) {
+        const line = raw.replace(/\r/g, '').trim();
+        if (line.length > 0) {
+          handleSignal(line);
+        }
+      }
+    }
+  } catch (err) {
+    if (serialReading) {
+      log(`Read error: ${err.message}`, 'err');
+    }
+  } finally {
+    try { serialReader.releaseLock(); } catch (_) {}
+    // If port closed unexpectedly, clean up UI
+    if (serialReading) {
+      await disconnectSerial();
+    }
+  }
+}
+
+// ============================================================
+// SIGNAL HANDLER — same logic as before, now fed by Serial
+// Messages the ESP32 prints via Serial.println():
+//   "Access Point Started"
+//   "Connect to WiFi: MedAccess_AP"
+//   "ESP32 IP Address: ..."
+//   "[N] Dashboard Connected!"
+//   "Emergency Broadcast Sent: LED1/2/3"  ← fires handleSignal with LED#
+//   "System Reset"
+//
+// The ESP32 also broadcastTXT's "LED1/LED2/LED3" and "CLEAR"
+// but those go to WebSocket clients, NOT to Serial.
+// What the Serial port DOES print is everything in Serial.print/println.
+// We parse the meaningful lines below.
+// ============================================================
+function handleSignal(msg) {
+  const t = new Date().toTimeString().slice(0, 8);
+  document.getElementById('statUpdate').textContent = t;
+  publishEsp32State({ lastMessage: msg });
+
+  // ── Access Point ready ──
+  if (msg.startsWith('Access Point Started')) {
+    log('ESP32 Access Point Started', 'ok');
+    updateConnDot(true);
+    document.getElementById('statSignal').textContent = 'READY';
+    publishEsp32State({
+      connected: true,
+      mode: serialPort ? 'serial' : (demoRunning ? 'demo' : 'idle'),
+      signal: 'READY'
+    });
+    return;
+  }
+
+  // ── "[N] Dashboard Connected!" — a WebSocket client joined (info only) ──
+  if (msg.includes('Dashboard Connected')) {
+    log(msg, 'ok');
+    return;
+  }
+
+  // ── Emergency trigger line: "Emergency Broadcast Sent: LED1" ──
+  if (msg.startsWith('Emergency Broadcast Sent:')) {
+    const parts = msg.split(':');
+    const signal = parts[1]?.trim();   // "LED1", "LED2", or "LED3"
+    if (signal === 'LED1' || signal === 'LED2' || signal === 'LED3') {
+      const n = parseInt(signal[3]);
+      log(`🚨 Emergency Broadcast Sent: ${signal}`, 'signal');
+      document.getElementById('statSignal').textContent = signal;
+      document.getElementById('statActive').textContent = '1';
+      setActive(n);
+      openCard(n);
+      publishEsp32State({
+        connected: true,
+        mode: serialPort ? 'serial' : (demoRunning ? 'demo' : 'idle'),
+        signal,
+        activeHospital: n
+      });
+    }
+    return;
+  }
+
+  // ── Reset line: "System Reset" ──
+  if (msg === 'System Reset') {
+    log('System Reset', 'ok');
+    document.getElementById('statSignal').textContent = 'CLEAR';
+    document.getElementById('statActive').textContent  = '0';
+    document.getElementById('statAcquired').textContent = '0';
+    setActive(0);
+    publishEsp32State({
+      connected: serialPort ? true : demoRunning,
+      mode: serialPort ? 'serial' : (demoRunning ? 'demo' : 'idle'),
+      signal: 'CLEAR',
+      activeHospital: 0
+    });
+    return;
+  }
+
+  // ── Any other line from the ESP32 (IP addresses, startup msgs, etc.) ──
+  // Log them at muted level so the developer can see all output
+  log(msg, '');
+}
+
+// ============================================================
+// MAP
+// ============================================================
+function initMap() {
+  map = L.map('map', { zoomControl: true }).setView([13.025, 80.22], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
+  hospitals.forEach((h, i) => {
+    h.marker = L.circleMarker([h.lat, h.lng], {
+      radius: 10, color: h.color, fillColor: h.color, fillOpacity: 0.2, weight: 2
+    }).addTo(map).bindPopup(`<b>${h.name}</b><br>LED${i+1}`);
+  });
+}
+
+function setMapActive(n) {
+  hospitals.forEach((h, i) => {
+    if (!h.marker) return;
+    const on = (i === n - 1);
+    h.marker.setStyle({ radius: on ? 20 : 10, fillOpacity: on ? 0.55 : 0.15, weight: on ? 3 : 2 });
+    if (on) h.marker.openPopup();
+  });
+  if (patientMarker) { map.removeLayer(patientMarker); patientMarker = null; }
+  if (n > 0) {
+    const h = hospitals[n - 1];
+    const jitter = (Math.random() - 0.5) * 0.012;
+    patientMarker = L.circleMarker([h.lat + jitter, h.lng + jitter], {
+      radius: 8, color: '#f43f5e', fillColor: '#f43f5e', fillOpacity: 0.75
+    }).addTo(map).bindPopup('🚨 Patient Nearby').openPopup();
+    map.setView([h.lat, h.lng], 13);
+  }
+}
+
+// ============================================================
+// HOSPITAL CARD ACTIVATION
+// ============================================================
+function setActive(n) {
+  activeHospital = n;
+  publishEsp32State({ activeHospital: n });
+  for (let i = 1; i <= 3; i++) {
+    const card   = document.getElementById(`card${i}`);
+    const status = document.getElementById(`status${i}`);
+    if (i === n) {
+      card.classList.add('active');
+      status.textContent = '● Nearby Emergency Active';
+      status.className = 'h-status emergency';
+    } else {
+      card.classList.remove('active');
+      status.textContent = '● Standby';
+      status.className = 'h-status';
+    }
+  }
+  if (n === 0) {
+    [1,2,3].forEach(i => document.getElementById(`expandPanel${i}`).classList.remove('open'));
+    if (patientMarker) { map.removeLayer(patientMarker); patientMarker = null; }
+    hospitals.forEach(h => h.marker?.setStyle({ radius: 10, fillOpacity: 0.15, weight: 2 }));
+  } else {
+    [1,2,3].forEach(i => { if (i !== n) document.getElementById(`expandPanel${i}`).classList.remove('open'); });
+    setMapActive(n);
+  }
+}
+
+function openCard(n) {
+  if (activeHospital !== n) return;
+  const panel = document.getElementById(`expandPanel${n}`);
+  const body  = document.getElementById(`expandBody${n}`);
+  const raw   = localStorage.getItem('medaccess_patient');
+
+  if (!raw) {
+    body.innerHTML = `<div class="denied-banner">⚠ No patient data. Patient has not registered yet.</div>`;
+    panel.classList.add('open');
+    document.getElementById('statAcquired').textContent = '0';
+    return;
+  }
+  const d = JSON.parse(raw);
+  if (d.denied) {
+    body.innerHTML = `<div class="denied-banner">🚫 Patient has denied emergency access. Contact patient directly.</div>`;
+    panel.classList.add('open');
+    return;
+  }
+
+  const photo = d.photo
+    ? `<img class="ep-photo" src="${d.photo}">`
+    : `<div class="ep-photo-ph">👤</div>`;
+
+  const fileChips = d.files?.length
+    ? d.files.map(f => `<span class="file-chip">📄 ${f}</span>`).join('')
+    : '<span style="font-size:11px;color:var(--muted)">None</span>';
+
+  body.innerHTML = `
+    <div class="ep-header">
+      <div>
+        <div class="ep-title">${hospitals[n-1].name} — Patient Access</div>
+        <div class="ep-hash">HASH: ${d.hash}</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button style="padding:6px 14px;background:rgba(244,63,94,.1);color:#f43f5e;border:1px solid rgba(244,63,94,.3);border-radius:8px;font-size:11px;cursor:pointer;font-family:var(--mono)" onclick="openDenyModal()">Deny Access</button>
+        <button class="close-btn" onclick="document.getElementById('expandPanel${n}').classList.remove('open')">✕</button>
+      </div>
+    </div>
+    <div class="ep-content">
+      ${photo}
+      <div>
+        <div style="font-family:var(--serif);font-size:20px">${d.name}</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-top:2px">${d.pid}</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px">Saved ${d.ts}</div>
+      </div>
+    </div>
+    <div class="ep-info-grid">
+      <div class="ep-chip"><div class="lbl">Age</div><div class="val">${d.age||'—'} yrs</div></div>
+      <div class="ep-chip blood"><div class="lbl">Blood</div><div class="val">${d.blood||'—'}</div></div>
+      <div class="ep-chip"><div class="lbl">Contact</div><div class="val">${d.contact||'—'}</div></div>
+      <div class="ep-chip"><div class="lbl">Email</div><div class="val" style="font-size:11px">${d.email||'—'}</div></div>
+      <div class="ep-chip"><div class="lbl">Emrg. Name</div><div class="val">${d.ecName||'—'}</div></div>
+      <div class="ep-chip"><div class="lbl">Emrg. Contact</div><div class="val">${d.ecNum||'—'}</div></div>
+    </div>
+    <div class="ep-section">
+      <div class="ep-sec-label">Medical History</div>
+      <div class="ep-sec-val">${d.history||'—'}</div>
+    </div>
+    <div class="ep-section">
+      <div class="ep-sec-label">Attached Files</div>
+      <div class="ep-files">${fileChips}</div>
+    </div>
+  `;
+  panel.classList.add('open');
+  document.getElementById('statAcquired').textContent = '1';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ============================================================
+// DENY MODAL
+// ============================================================
+function openDenyModal() { document.getElementById('denyOverlay').classList.add('open'); }
+function closeDenyModal() {
+  document.getElementById('denyOverlay').classList.remove('open');
+  document.getElementById('denyKeyInput').value = '';
+}
+function confirmDeny() {
+  const raw = localStorage.getItem('medaccess_patient');
+  if (!raw) return;
+  const d = JSON.parse(raw);
+  const key = document.getElementById('denyKeyInput').value;
+  if (d.accessKey && key !== d.accessKey) { showToast('Incorrect access key'); return; }
+  d.denied = true;
+  localStorage.setItem('medaccess_patient', JSON.stringify(d));
+  closeDenyModal();
+  [1,2,3].forEach(i => document.getElementById(`expandPanel${i}`).classList.remove('open'));
+  setActive(0);
+  showToast('Access denied — patient data hidden');
+}
+
+// ============================================================
+// DEMO MODE — fallback when no hardware connected
+// Mirrors ESP32 Serial.println output timing exactly
+// ============================================================
+function startDemo() {
+  if (demoRunning) { stopDemo(); return; }
+  if (serialPort) {
+    log('Disconnect serial port first to use demo mode.', 'err');
+    return;
+  }
+  demoRunning = true;
+  publishEsp32State({
+    connected: true,
+    mode: 'demo',
+    port: 'Demo',
+    signal: 'READY',
+    lastMessage: 'Demo mode active'
+  });
+  log('Demo mode active — simulating ESP32 serial output', 'ok');
+
+  // Simulate Access Point startup
+  handleSignal('Access Point Started');
+
+  function fireOneCycle() {
+    if (!demoRunning) return;
+    const ledNum = Math.floor(Math.random() * 3) + 1;
+    // Simulate exactly what ESP32 prints to Serial
+    handleSignal(`Emergency Broadcast Sent: LED${ledNum}`);
+
+    demoInterval = setTimeout(() => {
+      handleSignal('System Reset');
+      // Idle gap before next trigger
+      demoInterval = setTimeout(fireOneCycle, 3000);
+    }, ESP_RESET_MS);
+  }
+
+  setTimeout(fireOneCycle, 800);
+}
+
+function stopDemo() {
+  demoRunning = false;
+  clearTimeout(demoInterval);
+  handleSignal('System Reset');
+  updateConnDot(false);
+  publishEsp32State({
+    connected: false,
+    mode: 'idle',
+    port: '—',
+    signal: '—',
+    activeHospital: 0,
+    lastMessage: 'Demo stopped'
+  });
+  log('Demo stopped', '');
+}
+
+// ============================================================
+// UTIL
+// ============================================================
+function log(msg, type) {
+  const el = document.createElement('p');
+  el.textContent = `[${new Date().toTimeString().slice(0,8)}] ${msg}`;
+  if (type) el.className = type;
+  const box = document.getElementById('consoleMsgs');
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+}
+
+function updateConnDot(on) {
+  document.getElementById('connDot').className = 'stat-dot' + (on ? ' connected' : '');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// Clean up serial port if tab is closed
+window.addEventListener('beforeunload', () => {
+  serialReading = false;
+  try { serialReader?.cancel(); } catch (_) {}
+  try { serialPort?.close(); } catch (_) {}
+});
+
+// ============================================================
+// INIT
+// ============================================================
+publishEsp32State({
+  connected: false,
+  mode: 'idle',
+  port: '—',
+  signal: '—',
+  activeHospital: 0,
+  lastMessage: 'Hospital panel loaded'
+});
+initMap();
+</script>
+</body>
+</html>
