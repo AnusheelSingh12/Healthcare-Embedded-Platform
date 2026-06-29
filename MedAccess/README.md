@@ -32,7 +32,7 @@
 
 <p align="center">
 
-&#x20; <img src="Images/Hardware\_Setup.jpeg" width="750" alt="MedAccess Hardware Prototype">
+&#x20; <img src="Images/Hardware_Setup.jpeg" width="750" alt="MedAccess Hardware Prototype">
 
 </p>
 
