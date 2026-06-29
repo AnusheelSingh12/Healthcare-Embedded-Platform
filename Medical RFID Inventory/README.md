@@ -6,7 +6,7 @@
 
 # 🎥 Project Demonstration
 
-> 🎬 **YouTube project demonstration will be added here.**
+> https://www.youtube.com/watch?v=DTw08SvjALI
 
 ---
 
