@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RFID Surgical Inventory</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="dashboard-shell">
+      <header class="dashboard-header">
+        <div>
+          <h1>RFID Surgical Inventory</h1>
+          <p>Real-time traceability for sterile tool management</p>
+        </div>
+        <div class="header-links">
+          <a class="btn btn-muted" href="/history">Movement History</a>
+          <span id="socketStatus" class="badge neutral">Socket: Connecting</span>
+        </div>
+      </header>
+
+      <section class="bento-grid">
+        <article id="liveScanCard" class="card card-large">
+          <h2>Live Scan Feed</h2>
+          <div class="scan-feed">
+            <p class="scan-label">Latest UID</p>
+            <p id="liveUid" class="scan-value">Waiting...</p>
+            <div class="scan-meta">
+              <span id="liveName">-</span>
+              <span id="liveCategory">-</span>
+            </div>
+            <span id="liveStatus" class="badge neutral">No Scan</span>
+            <p id="liveAction" class="muted">Action: --</p>
+            <p id="liveSeen" class="muted">Device time: --</p>
+          </div>
+        </article>
+
+        <article class="card card-medium">
+          <h2>Port Configuration</h2>
+          <label for="portSelect">Serial Port</label>
+          <select id="portSelect"></select>
+          <div class="actions-row">
+            <button id="refreshPortsBtn" class="btn btn-muted" type="button">Refresh</button>
+            <button id="connectBtn" class="btn btn-primary" type="button">Connect</button>
+            <button id="disconnectBtn" class="btn btn-danger" type="button">Disconnect</button>
+          </div>
+          <p id="portMessage" class="muted">Choose a port to begin listening.</p>
+        </article>
+
+        <article class="card card-small">
+          <h2>Quick Stats</h2>
+          <div class="stat-grid">
+            <div>
+              <p class="stat-label">Registered</p>
+              <p id="statRegistered" class="stat-value">0</p>
+            </div>
+            <div>
+              <p class="stat-label">Gauze Used</p>
+              <p id="statGauzeUsed" class="stat-value">0</p>
+            </div>
+            <div>
+              <p class="stat-label">Tools Missing</p>
+              <p id="statToolsMissing" class="stat-value missing">0</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="card card-wide">
+          <div id="categoryGrid" class="category-grid"></div>
+        </article>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

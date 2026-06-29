@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Movement History | RFID Surgical Inventory</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="dashboard-shell">
+      <header class="dashboard-header">
+        <div>
+          <h1>Incoming / Outgoing Tracker</h1>
+          <p>View current tools IN/OUT and update UID metadata</p>
+        </div>
+        <div class="header-links">
+          <a class="btn btn-muted" href="/">Dashboard</a>
+        </div>
+      </header>
+
+      <section class="history-layout">
+        <article class="card history-table-card">
+          <h2>Tool Presence</h2>
+          <p class="muted">Non-gauze tools are split into IN and OUT tables.</p>
+          <div class="actions-row">
+            <button id="showAllHistoryBtn" class="btn btn-muted" type="button">Show All Movement History</button>
+            <button id="hideAllHistoryBtn" class="btn btn-muted" type="button" hidden>Hide Movement History</button>
+            <button id="clearHistoryBtn" class="btn btn-danger" type="button">Clear All Movement History</button>
+          </div>
+
+          <div class="presence-grid">
+            <div class="table-wrap">
+              <h3>Tools IN</h3>
+              <table class="history-table">
+                <thead>
+                  <tr>
+                    <th>UID</th>
+                    <th>Name</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody id="toolsInTableBody"></tbody>
+              </table>
+            </div>
+
+            <div class="table-wrap">
+              <h3>Tools OUT</h3>
+              <table class="history-table">
+                <thead>
+                  <tr>
+                    <th>UID</th>
+                    <th>Name</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody id="toolsOutTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="allHistoryPanel" class="all-history-panel" hidden>
+            <h3>All Movement History</h3>
+            <div class="table-wrap">
+              <table class="history-table">
+                <thead>
+                  <tr>
+                    <th>UID</th>
+                    <th>Name</th>
+                    <th>Action</th>
+                    <th>Time</th>
+                    <th>Gauze Count</th>
+                    <th>Tools Missing</th>
+                  </tr>
+                </thead>
+                <tbody id="allHistoryTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </article>
+
+        <article class="card edit-card">
+          <h2>Edit UID Information</h2>
+          <p class="muted">Select an item, then update UID and name.</p>
+
+          <label for="editUidSelect">Select UID</label>
+          <select id="editUidSelect"></select>
+
+          <label for="newUidInput">New UID</label>
+          <input id="newUidInput" class="text-input" type="text" placeholder="Leave blank to keep current" />
+
+          <label for="nameInput">Name</label>
+          <input id="nameInput" class="text-input" type="text" />
+
+          <div class="actions-row">
+            <button id="refreshItemsBtn" class="btn btn-muted" type="button">Refresh</button>
+            <button id="saveItemBtn" class="btn btn-primary" type="button">Save</button>
+          </div>
+          <p id="editMessage" class="muted">No item selected.</p>
+        </article>
+      </section>
+    </main>
+
+    <script src="/static/history.js"></script>
+  </body>
+</html>
